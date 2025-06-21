@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Smart Home Voice Control</title>
+  <style>
+    body { background: black; color: white; font-family: sans-serif; text-align: center; }
+    #wall { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 20px; }
+    img.device { width: 180px; transition: transform 0.7s; }
+    .zoom { transform: scale(2); z-index: 10; }
+    audio, video { display: none; }
+  </style>
+</head>
+<body>
+  <h1>🎤 Smart Home Voice Controller</h1>
+  <button onclick="startListening()">Speak</button>
+  <p id="status">Waiting...</p>
+  <div id="wall">
+    <img id="light" class="device" src="/static/light_off.png" />
+    <img id="fan" class="device" src="/static/fan_off.png" />
+    <img id="tv" class="device" src="/static/tv_off.png" />
+    <img id="ac" class="device" src="/static/ac_off.png" />
+    <img id="music" class="device" src="/static/music_off.png" />
+    <img id="alarm" class="device" src="/static/alarm_off.png" />
+  </div>
+
+  <video id="tvVideo" width="400" controls loop>
+    <source src="/static/channel1.mp4" type="video/mp4" />
+  </video>
+  <audio id="musicAudio" src="/static/music.mp3" loop></audio>
+  <audio id="alarmSound" src="/static/alarm.mp3"></audio>
+
+  <script>
+    function startListening() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = "en-US";
+      recognition.start();
+      document.getElementById("status").textContent = "Listening...";
+
+      recognition.onresult = async function(event) {
+        const command = event.results[0][0].transcript;
+        document.getElementById("status").textContent = "Heard: " + command;
+
+        const response = await fetch("/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command })
+        });
+
+        const data = await response.json();
+        const el = document.getElementById(data.object);
+        if (!el) return;
+
+        el.classList.add("zoom");
+
+        setTimeout(() => {
+          if (data.object === "fan")
+            el.src = data.action === "on" ? "/static/fan_on.gif" : "/static/fan_off.png";
+          else if (data.object === "light")
+            el.src = data.action === "on" ? "/static/light_on.png" : "/static/light_off.png";
+          else if (data.object === "tv") {
+            el.src = data.action === "on" ? "/static/tv_on.png" : "/static/tv_off.png";
+            const vid = document.getElementById("tvVideo");
+            vid.style.display = data.action === "on" ? "block" : "none";
+            if (data.action === "on") vid.play(); else vid.pause();
+          } else if (data.object === "ac")
+            el.src = data.action === "on" ? "/static/ac_on.gif" : "/static/ac_off.png";
+          else if (data.object === "music") {
+            el.src = data.action === "on" ? "/static/music_on.png" : "/static/music_off.png";
+            const m = document.getElementById("musicAudio");
+            if (data.action === "on") m.play(); else m.pause();
+          } else if (data.object === "alarm") {
+            el.src = data.action === "on" ? "/static/alarm_on.png" : "/static/alarm_off.png";
+            if (data.action === "on") document.getElementById("alarmSound").play();
+          }
+          setTimeout(() => el.classList.remove("zoom"), 2000);
+        }, 800);
+      };
+    }
+  </script>
+</body>
+</html>
